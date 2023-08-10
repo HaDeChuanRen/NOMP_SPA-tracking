@@ -1,12 +1,14 @@
 % obeject method test
-% last update: 2023/7/20
-% 2023/7/20 update detials:
-% 1. (Todo) revise the main function to fit the class defination and test the
-%  class definiton file
+% last update: 2023/8/9
+% 2023/8/9 update detials:
+% 1. (Todo) debug and test the ground truth and signal product function.
+% 2. (Todo) calculated the Rmat by CRB, calculate Smat by Rmat.
+% 3. (Todo) calculated OSPA distance at the end of the main function and store
+%   the OSPA result of algorithm, name the algorithm
 
 
 clc; clear; close all;
-rng(1);
+rng(7);
 addpath('NOMP1D tools\')
 addpath('NOMP2D tools\')
 addpath('analysis tools\')
@@ -14,7 +16,7 @@ addpath('Tracking tools')
 
 % targets location, velocity, appear time disapear time initialization
 sample_time = 60;   % the total samples of tracking
-K_targets = 6;
+K_targets = 8;
 xrange = 10;
 xmin = -5;
 xPosition_true0 = xrange * rand(K_targets, 1) + xmin;
@@ -27,7 +29,8 @@ yPosition_true0 = yrange * rand(K_targets, 1) + ymin;
 vyrange = 0.4;
 vymin = -0.1;
 yVelocity_true0 = vyrange * rand(K_targets, 1) + vymin;
-
+Xori_mat = [xPosition_true0'; xVelocity_true0'; yPosition_true0'; ...
+    yVelocity_true0'];
 
 xlim_l = xmin + sample_time * min([vxmin, 0]);
 xlim_r = xmin + xrange + sample_time * max([vxrange + vxmin, 0]);
@@ -57,50 +60,62 @@ mu_c = 1;    % the mean number of clutters (Possion)
 state_dim = 4;    % the number of state dimensions
 range_c = [-100, -100; 100, 100];    % the range of clutters
 T = 1;    % sample interval
-sigma_w = [0.0001; 0; 0.0001; 0];    % state transition noise variance
-sigma_v = [0.01; 0.01];    % measurement noise variance
+sigma_w = [1e-6; 0; 1e-6; 0];    % state transition noise variance
+sigma_v = [0.001; 0.001];    % measurement noise variance
 Pd_xki = 0.9;    % detection probability
 L_ite = 5;    % the iteration times
-P_G = 0.9;
+% P_G = 0.99;
 % range2_PG = - 2 * log(1 - P_G);
 
 % the transition parameters matrix
 Amat_state = [1 T 0 0; 0 1 0 0; 0 0 1 T; 0 0 0 1];    % state transition matrix
 Hmat_mea = [1 0 0 0; 0 0 1 0];    % measurment matrix
-Rmat_noise = eye(2) * diag(sigma_v);    % measurement covriance
+% Rmat_noise = eye(2) * diag(sigma_v);    % measurement covriance
+
 % Todo: use CRB to describe the Rmat_noise
 Tmat_temp = [1, 1/T; 1/T, 2/T^2];
-Pmat_cov = kron(Rmat_noise, Tmat_temp);
+
 % Question: why?
-V = wgn(1,2,0);
-Qmat_noise = [T^4/4*(V'*V)  T^3/2*(V'*V); T^3/2*(V'*V) T^2*(V'*V)];
+% V = wgn(1,2,0);
+% Qmat_noise = zeros(state_dim);
+% Qmat_noise = [T^4/4*(V'*V)  T^3/2*(V'*V); T^3/2*(V'*V) T^2*(V'*V)];
 % Q: revise the definition of Qmat
 
 
 
 % create the real state array
-xPosseq_true = zeros(K_targets, sample_time);
-yPosseq_true = zeros(K_targets, sample_time);
-xVelseq_true = zeros(K_targets, sample_time);
-yVelseq_true = zeros(K_targets, sample_time);
+% xPosseq_true = zeros(K_targets, sample_time);
+% yPosseq_true = zeros(K_targets, sample_time);
+% xVelseq_true = zeros(K_targets, sample_time);
+% yVelseq_true = zeros(K_targets, sample_time);
 
-% set the original states of all targets
-xPosseq_true(:, 1) = xPosition_true0;
-yPosseq_true(:, 1) = yPosition_true0;
-xVelseq_true(:, 1) = xVelocity_true0;
-yVelseq_true(:, 1) = yVelocity_true0;
+% % set the original states of all targets
+% xPosseq_true(:, 1) = xPosition_true0;
+% yPosseq_true(:, 1) = yPosition_true0;
+% xVelseq_true(:, 1) = xVelocity_true0;
+% yVelseq_true(:, 1) = yVelocity_true0;
 
-% calculate the state at each instant
-for t_time = 2 : sample_time
-    Xtrue_kt = Amat_state * [xPosseq_true(:, t_time - 1)'; ...
-        xVelseq_true(:, t_time - 1)'; yPosseq_true(:, t_time - 1)'; ...
-        yVelseq_true(:, t_time - 1)'] + ...
-        sqrt(sigma_w) .* randn(state_dim, 1);
-    xPosseq_true(:, t_time) = Xtrue_kt(1, :);
-    xVelseq_true(:, t_time) = Xtrue_kt(2, :);
-    yPosseq_true(:, t_time) = Xtrue_kt(3, :);
-    yVelseq_true(:, t_time) = Xtrue_kt(4, :);
-end
+% % calculate the state at each instant
+% for t_time = 2 : sample_time
+%     Xtrue_kt = Amat_state * [xPosseq_true(:, t_time - 1)'; ...
+%         xVelseq_true(:, t_time - 1)'; yPosseq_true(:, t_time - 1)'; ...
+%         yVelseq_true(:, t_time - 1)'] + ...
+%         sqrt(sigma_w) .* randn(state_dim, 1);
+%     xPosseq_true(:, t_time) = Xtrue_kt(1, :);
+%     xVelseq_true(:, t_time) = Xtrue_kt(2, :);
+%     yPosseq_true(:, t_time) = Xtrue_kt(3, :);
+%     yVelseq_true(:, t_time) = Xtrue_kt(4, :);
+% end
+
+% ground_all = zeros(state_dim, sample_time, K_targets);
+
+
+% line spectrum parameter
+Nx = 256;
+My = 64;
+Lz = 8;
+NML = Nx * My * Lz;
+array_Fun = @(omega, N) exp(1j * (0 : (N - 1))' * omega) / sqrt(N);
 
 % use the state array to create line spectrum in each time instant
 % radar parameter
@@ -119,13 +134,6 @@ rmax = c / (2 * Ts * Slope_fre);    % maximum radial range
 vmax = c / (4 * Fre_start * T_circle);    % maximum radial velocity
 vdel = 2 * vmax / My;
 
-% line spectrum parameter
-Nx = 256;
-My = 64;
-Lz = 8;
-NML = Nx * My * Lz;
-array_Fun = @(omega, N) exp(1j * (0 : (N - 1))' * omega) / sqrt(N);
-
 
 % snr_set = 30;
 P_CW = 1.78e-2;
@@ -141,71 +149,91 @@ B_IF = 5e6;
 SNR_temp = NML * (P_CW * G_t * G_r * lambda_cw^2 * sigma_RCS) ./ ...
     ((4 * pi)^3 * L_loss * k_Boltz * T_kel * F_R * B_IF);
 sigma_n = 1;
+SNR_kt = 25;
 % Todo: the SNR and noise variance can be calculated by equations
 
-% initialize real r, v, theta parameters of each instant
-rmat_true = zeros(K_targets, sample_time);
-vmat_true = zeros(K_targets, sample_time);
-thetamat_true = zeros(K_targets, sample_time);
+kappa_crb = 1;
+CRB_mat = (6 / pi ^ 2) * (10 ^ (- SNR_kt / 10)) * ...
+[(rmax * sin(pi / 3))^2 / (4 * (Nx^2 - 1)) + rmax^2 / (Lz^2 - 1), 0; ....
+0, rmax^2 / (4 * (Nx^2 - 1)) + rmax^2 / (Lz^2 - 1)];
+Rmat_noise = kappa_crb * CRB_mat;
 
 
-% initialize real omega parameters of each dimension
-% $\omega \in (-\pi, \pi]$
-omegaxmat_true = zeros(K_targets, sample_time);
-omegaymat_true = zeros(K_targets, sample_time);
-omegazmat_true = zeros(K_targets, sample_time);
-% gain_true = sqrt(10 .^ (snr_set / 10) * sqrt(sigma_n)) .* ...
-%     exp(1j * 2 * pi * rand(K_targets, sample_time));
-
-yten_spec = zeros(Nx, My, Lz, sample_time);
-
-for t_time = 1 : sample_time
-    % obtain the real measurements in the instant t
-    rmat_true(:, t_time) = sqrt(xPosseq_true(:, t_time) .^ 2 + ...
-        yPosseq_true(:, t_time) .^ 2);
-    thetamat_true(:, t_time) = atan(xPosseq_true(:, t_time) ./ ...
-        yPosseq_true(:, t_time));
-    vmat_true(:, t_time) = xVelseq_true(:, t_time) .* ...
-        cos(thetamat_true(:, t_time)) + yVelseq_true(:, t_time) .* ...
-        sin(thetamat_true(:, t_time));
-
-    % calculate the corresponding angular frequency
-    % $\omega \in (-\pi, \pi]$
-    omegaxmat_true(:, t_time) = wrapToPi(rmat_true(:, t_time) / rmax * 2 * pi);
-    omegaymat_true(:, t_time) = vmat_true(:, t_time) / vmax * pi;
-    omegazmat_true(:, t_time) = pi * sin(thetamat_true(:, t_time));
-
-    % create the line spectrum tensors in the instant t
-    yvec_t = zeros(NML, 1);
-    for k_idx = 1 : K_targets
-%         if abs(thetamat_true(k_idx, t_time)) > pi / 3
-%             continue;
-%         end
-        SNR_kt = 30;
-        gain_kt = sqrt(10 ^ (SNR_kt / 10) * sqrt(sigma_n)) .* exp(1j * 2 * ...
-            pi * rand());
-        yvec_kt = kron(kron(array_Fun(omegazmat_true(k_idx, t_time), Lz), ...
-            array_Fun(omegaymat_true(k_idx, t_time), My)), ...
-            array_Fun(omegaxmat_true(k_idx, t_time), Nx));
-        yvec_t = yvec_t + gain_kt * yvec_kt;
-    end
-    yvec_t = yvec_t + sqrt(1 / 2) * (randn(NML, 1) + 1j * randn(NML, 1));
-    yten_spec(:, :, :, t_time) = reshape(yvec_t, Nx, My, Lz);
-end
+Qmat_noise = diag(sigma_w);
+Pmat_cov = kron(Rmat_noise, Tmat_temp);
+% % initialize real r, v, theta parameters of each instant
+% rmat_true = zeros(K_targets, sample_time);
+% vmat_true = zeros(K_targets, sample_time);
+% thetamat_true = zeros(K_targets, sample_time);
 
 
+% % initialize real omega parameters of each dimension
+% % $\omega \in (-\pi, \pi]$
+% omegaxmat_true = zeros(K_targets, sample_time);
+% omegaymat_true = zeros(K_targets, sample_time);
+% omegazmat_true = zeros(K_targets, sample_time);
+% % gain_true = sqrt(10 .^ (snr_set / 10) * sqrt(sigma_n)) .* ...
+% %     exp(1j * 2 * pi * rand(K_targets, sample_time));
+
+% yten_spec = zeros(Nx, My, Lz, sample_time);
+
+% for t_time = 1 : sample_time
+%     % obtain the real measurements in the instant t
+%     rmat_true(:, t_time) = sqrt(xPosseq_true(:, t_time) .^ 2 + ...
+%         yPosseq_true(:, t_time) .^ 2);
+%     thetamat_true(:, t_time) = atan(xPosseq_true(:, t_time) ./ ...
+%         yPosseq_true(:, t_time));
+%     vmat_true(:, t_time) = xVelseq_true(:, t_time) .* ...
+%         cos(thetamat_true(:, t_time)) + yVelseq_true(:, t_time) .* ...
+%         sin(thetamat_true(:, t_time));
+
+%     % calculate the corresponding angular frequency
+%     % $\omega \in (-\pi, \pi]$
+%     omegaxmat_true(:, t_time) = wrapToPi(rmat_true(:, t_time) / rmax * 2 * pi);
+%     omegaymat_true(:, t_time) = vmat_true(:, t_time) / vmax * pi;
+%     omegazmat_true(:, t_time) = pi * sin(thetamat_true(:, t_time));
+
+%     % create the line spectrum tensors in the instant t
+%     yvec_t = zeros(NML, 1);
+%     for k_idx = 1 : K_targets
+% %         if abs(thetamat_true(k_idx, t_time)) > pi / 3
+% %             continue;
+% %         end
+%         SNR_kt = 30;
+%         gain_kt = sqrt(10 ^ (SNR_kt / 10) * sqrt(sigma_n)) .* exp(1j * 2 * ...
+%             pi * rand());
+%         yvec_kt = kron(kron(array_Fun(omegazmat_true(k_idx, t_time), Lz), ...
+%             array_Fun(omegaymat_true(k_idx, t_time), My)), ...
+%             array_Fun(omegaxmat_true(k_idx, t_time), Nx));
+%         yvec_t = yvec_t + gain_kt * yvec_kt;
+%     end
+%     yvec_t = yvec_t + sqrt(1 / 2) * (randn(NML, 1) + 1j * randn(NML, 1));
+%     yten_spec(:, :, :, t_time) = reshape(yvec_t, Nx, My, Lz);
+% end
+
+% create the ground truth and signals
+[ground_all, yten_spec] = grdsig_prod(sample_time, Xori_mat, Amat_state, ...
+    sigma_w, sigma_n, rmax, vmax, Nx, My, Lz, SNR_kt);
+% xPosseq_true = squeeze(ground_all(1, :, :));
+% xVelseq_true = squeeze(ground_all(2, :, :));
+% yPosseq_true = squeeze(ground_all(3, :, :));
+% yVelseq_true = squeeze(ground_all(4, :, :));
 
 % set the parameters of NOMP-CFAR algorithm
 P_fa = 0.001;
 N_r = 60;
 NM = Nx * My;
 alpha_2D = alpha_PoebyS(P_fa, NM, N_r, Lz);
-K_max = 16;
+K_max = 10;
 
 tic;
-[history_all, Zcol_cell] = NOMP_SPAtracking(yten_spec, alpha_2D, N_r, K_max,...
-    rmax, vmax, Pmat_cov, Qmat_noise, Amat_state, Hmat_mea, Rmat_noise);
-
+[history_all, label_all, Zcol_cell] = NOMP_SPAsoft(yten_spec, alpha_2D, ...
+    N_r, K_max, rmax, vmax, Pmat_cov, Qmat_noise, Amat_state, Hmat_mea, ...
+    Rmat_noise);
+fl_save = 'truth_his.mat';
+save(fl_save, 'ground_all', 'Zcol_cell', 'history_all', 'label_all');
+% [OSPA_dist, ~] = OSPA_cal(ground_all, history_all, label_all, ...
+%     Delta_thr);
 
 % Zcol_cell = cell(sample_time, 1);
 
@@ -467,18 +495,18 @@ tic;
 %     end
 % end
 K_count = size(history_all, 3);
-save('true_history.mat', 'history_all', 'xPosseq_true', 'xVelseq_true', ...
-    'yPosseq_true', 'yVelseq_true')
+% save('true_history.mat', 'history_all', 'xPosseq_true', 'xVelseq_true', ...
+%     'yPosseq_true', 'yVelseq_true')
 
 toc;
 % delete(whandle);
 
 
 K_del = [];
-for k_idx = 1 : K_count
-    testvec_k = squeeze(history_all(1, :, k_idx));
+for k_eidx = 1 : K_count
+    testvec_k = squeeze(history_all(1, :, k_eidx));
     if sum(isnan(testvec_k)) > sample_time * 0.96
-        K_del = [K_del, k_idx];
+        K_del = [K_del, k_eidx];
     end
 end
 history_all(:, :, K_del) = [];
@@ -512,15 +540,16 @@ num_color = 8;
 for t_time = 1 : sample_time
     phandle_bond = plot(xlim_vec, ybon_vec, '--k', 'LineWidth', Lw);
     for k_tidx = 1 : K_targets
-        phandle_ture = plot(xPosseq_true(k_tidx, 1 : t_time), yPosseq_true(k_tidx, ...
-            1 : t_time), '-bo', 'LineWidth', Lw, 'Marker', 's', 'MarkerSize', Msz);
+        phandle_ture = plot(ground_all(1, 1 : t_time, k_tidx), ground_all(3, ...
+        1 : t_time, k_tidx), '-bo', 'LineWidth', Lw, 'Marker', 's', ...
+        'MarkerSize', Msz);
     end
 
-    for k_idx = 1 : K_count
-        c_idx = mod(k_idx, num_color) + 1;
-        phandle_hat = plot(history_all(1, 1 : t_time, k_idx), history_all(3, ...
-            1 : t_time, k_idx), color_vec(c_idx, :), 'LineWidth', Lw, 'Marker', ...
-            's', 'MarkerSize', Msz);
+    for k_eidx = 1 : K_count
+        c_idx = mod(k_eidx, num_color) + 1;
+        phandle_hat = plot(history_all(1, 1 : t_time, k_eidx), history_all(3,...
+            1 : t_time, k_eidx), color_vec(c_idx, :), 'LineWidth', Lw, ...
+            'Marker', 's', 'MarkerSize', Msz);
     end
 
     if ~isempty(Zcol_cell{t_time})
@@ -539,7 +568,7 @@ close(test_video)
 
 
 % legend('Fontsize', Fsz);
-% 
+%
 % filename = "testgif.gif";
 % for t_time = 1 : sample_time - 1
 %     [A_t, map_t] = rgb2ind(im_seq{t_time}, 256);
@@ -552,4 +581,9 @@ close(test_video)
 %     end
 % end
 
-
+% 2023/7/22 update detials:
+% 1. revise the main function to fit the class defination and test the
+%  class definiton file.
+% 2023/7/26 update detials:
+% 1. create the ground_all tensor which is the input of OSPA_cal function
+%   save the varibables ground_all, label_all, history_all.
